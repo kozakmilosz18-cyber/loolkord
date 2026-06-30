@@ -1,3 +1,12 @@
+--[[
+    Silent Aim System - CLASSIC WHITE FOV
+    - FOV always stays neon white
+    - Press X to toggle ON/OFF
+    - Ignores downed/ragdolled players
+    - Stable targeting - no crazy switching
+    - FOV: 90px at screen center
+]]
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -12,11 +21,10 @@ local CONFIG = {
     MaxDistance = 200,
     ActivateKey = Enum.KeyCode.X,
     LockStrength = 0.3,
-    NormalColor = Color3.fromRGB(255, 255, 255),
-    NormalGlowColor = Color3.fromRGB(200, 200, 255),
-    ActiveColor = Color3.fromRGB(255, 200, 100),
-    TargetColor = Color3.fromRGB(180, 0, 255),
-    TargetGlowColor = Color3.fromRGB(220, 100, 255),
+    SwitchCooldown = 0.5,
+    MinScreenDistDiff = 15,
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    FOVGlowColor = Color3.fromRGB(200, 200, 255),
     DashLength = 6,
     GapLength = 12,
     RotationSpeed = 180,
@@ -58,7 +66,7 @@ local function CreateFOVGUI()
         dash.Name = "Dash_" .. i
         dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
         dash.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
-        dash.BackgroundColor3 = CONFIG.NormalColor
+        dash.BackgroundColor3 = CONFIG.FOVColor
         dash.BackgroundTransparency = 0.1
         dash.BorderSizePixel = 0
         dash.Rotation = math.deg(angle)
@@ -68,7 +76,7 @@ local function CreateFOVGUI()
         glow.Name = "Glow"
         glow.Size = UDim2.new(1, 4, 1, 4)
         glow.Position = UDim2.new(0.5, -2, 0.5, -2)
-        glow.BackgroundColor3 = CONFIG.NormalGlowColor
+        glow.BackgroundColor3 = CONFIG.FOVGlowColor
         glow.BackgroundTransparency = 0.8
         glow.BorderSizePixel = 0
         glow.Parent = dash
@@ -86,8 +94,8 @@ local function CreateFOVGUI()
     statusLabel.Position = UDim2.new(0.5, -100, 1.2, 0)
     statusLabel.BackgroundTransparency = 1
     statusLabel.Text = "⬜ READY"
-    statusLabel.TextColor3 = CONFIG.NormalColor
-    statusLabel.TextSize = 14
+    statusLabel.TextColor3 = CONFIG.FOVColor
+    statusLabel.TextSize = 13
     statusLabel.Font = Enum.Font.SourceSansBold
     statusLabel.Parent = fovFrame
     
@@ -100,24 +108,56 @@ local function CreateFOVGUI()
     }
 end
 
--- Get targets
+-- Check if player is downed/ragdolled
+local function IsPlayerDowned(character)
+    if not character then return true end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return true end
+    
+    if humanoid.Health <= 0 then return true end
+    
+    local state = humanoid:GetState()
+    if state == Enum.HumanoidStateType.Physics or 
+       state == Enum.HumanoidStateType.Dead or
+       state == Enum.HumanoidStateType.FallingDown or
+       state == Enum.HumanoidStateType.GettingUp then
+        return true
+    end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        local upVector = rootPart.CFrame.Rotation.UpVector
+        if math.abs(upVector.Y) < 0.7 then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Get valid targets (exclude downed players)
 local function GetTargets()
     local targets = {}
     local cameraPos = Camera.CFrame.Position
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= Player and player.Character then
+            if IsPlayerDowned(player.Character) then
+                continue
+            end
+            
             local humanoid = player.Character:FindFirstChild("Humanoid")
             local head = player.Character:FindFirstChild("Head")
             
             if humanoid and head and humanoid.Health > 0 then
-                -- Get screen position of head
                 local headPos, onScreen = Camera:WorldToScreenPoint(head.Position)
                 if onScreen then
                     local distance = (head.Position - cameraPos).Magnitude
                     if distance <= CONFIG.MaxDistance then
                         table.insert(targets, {
                             Player = player,
+                            Humanoid = humanoid,
                             Head = head,
                             HeadScreenPos = Vector2.new(headPos.X, headPos.Y),
                             Distance = distance,
@@ -132,40 +172,59 @@ local function GetTargets()
     return targets
 end
 
--- Get closest target in FOV
-local function GetClosestTarget(targets)
-    local best = nil
-    local bestDist = CONFIG.FOVRadius + 1
+-- Get the best target with stability
+local function GetBestTarget(targets, currentTarget)
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
-    -- Get screen center
-    local viewportSize = Camera.ViewportSize
-    local center = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
-    
-    for _, target in pairs(targets) do
-        local dist = (target.HeadScreenPos - center).Magnitude
-        if dist <= CONFIG.FOVRadius and dist < bestDist then
-            bestDist = dist
-            best = target
+    if currentTarget then
+        local stillValid = false
+        for _, target in pairs(targets) do
+            if target.Player == currentTarget.Player then
+                local dist = (target.HeadScreenPos - center).Magnitude
+                if dist <= CONFIG.FOVRadius then
+                    stillValid = true
+                    currentTarget.Distance = target.Distance
+                    currentTarget.HeadPosition = target.HeadPosition
+                    currentTarget.HeadScreenPos = target.HeadScreenPos
+                    break
+                end
+            end
+        end
+        
+        if stillValid then
+            return currentTarget, false
         end
     end
     
-    return best
+    local best = nil
+    local bestScore = CONFIG.FOVRadius + 1
+    
+    for _, target in pairs(targets) do
+        local screenDist = (target.HeadScreenPos - center).Magnitude
+        
+        if screenDist <= CONFIG.FOVRadius then
+            local score = screenDist + (target.Distance / 10)
+            
+            if not best or score < bestScore then
+                bestScore = score
+                best = target
+            end
+        end
+    end
+    
+    return best, true
 end
 
--- Update FOV colors
-local function UpdateFOVColors(color, glowColor, statusText)
-    for _, data in pairs(fovData.DashParts) do
-        data.Frame.BackgroundColor3 = color
-        data.Glow.BackgroundColor3 = glowColor or color
-    end
-    fovData.StatusLabel.Text = statusText
-    fovData.StatusLabel.TextColor3 = color
+-- Update status label only (NO COLOR CHANGES)
+local function UpdateStatus(text)
+    fovData.StatusLabel.Text = text
 end
 
 -- Initialize
 local fovData = CreateFOVGUI()
 local isActive = false
 local currentTarget = nil
+local lastSwitchTime = 0
 
 -- Rotation animation
 RunService.Heartbeat:Connect(function(deltaTime)
@@ -187,21 +246,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         isActive = not isActive
         
         if isActive then
-            UpdateFOVColors(CONFIG.ActiveColor, CONFIG.ActiveColor, "🟠 AIMING")
-            print("✅ AIMLOCK ACTIVATED - Press X to toggle")
+            UpdateStatus("⬜ AIMING")
         else
-            UpdateFOVColors(CONFIG.NormalColor, CONFIG.NormalGlowColor, "⬜ READY")
+            UpdateStatus("⬜ READY")
             currentTarget = nil
-            print("✅ AIMLOCK DEACTIVATED")
         end
     end
 end)
 
--- Main loop - SIMPLE CAMLOCK
+-- Main loop
 RunService.RenderStepped:Connect(function()
     if not isActive then
         if fovData.StatusLabel.Text ~= "⬜ READY" then
-            UpdateFOVColors(CONFIG.NormalColor, CONFIG.NormalGlowColor, "⬜ READY")
+            UpdateStatus("⬜ READY")
         end
         return
     end
@@ -210,45 +267,54 @@ RunService.RenderStepped:Connect(function()
     local humanoid = Player.Character:FindFirstChild("Humanoid")
     if not humanoid or humanoid.Health <= 0 then return end
     
-    -- Get targets
     local targets = GetTargets()
     
     if #targets == 0 then
-        UpdateFOVColors(CONFIG.ActiveColor, CONFIG.ActiveColor, "🟠 NO PLAYERS")
-        currentTarget = nil
+        if currentTarget then
+            UpdateStatus("⬜ NO PLAYERS")
+            currentTarget = nil
+        end
         return
     end
     
-    -- Find closest target in FOV
-    local target = GetClosestTarget(targets)
+    local target, isNew = GetBestTarget(targets, currentTarget)
     
     if target then
-        -- We have a target!
-        currentTarget = target
+        local currentTime = tick()
+        if isNew and currentTarget and target.Player ~= currentTarget.Player then
+            if currentTime - lastSwitchTime >= CONFIG.SwitchCooldown then
+                currentTarget = target
+                lastSwitchTime = currentTime
+            else
+                target = currentTarget
+            end
+        elseif not currentTarget then
+            currentTarget = target
+            lastSwitchTime = currentTime
+        end
         
-        -- Get head position
-        local headPos = target.HeadPosition
-        local camPos = Camera.CFrame.Position
-        
-        -- Calculate direction
-        local direction = (headPos - camPos).Unit
-        
-        -- Create target CFrame
-        local targetCFrame = CFrame.lookAt(camPos, camPos + direction)
-        
-        -- Apply smooth lock
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, CONFIG.LockStrength)
-        
-        -- Update UI
-        UpdateFOVColors(
-            CONFIG.TargetColor,
-            CONFIG.TargetGlowColor,
-            "💜 " .. target.Player.Name .. " (" .. math.floor(target.Distance) .. "s)"
-        )
+        if currentTarget then
+            local headPos = currentTarget.HeadPosition
+            local camPos = Camera.CFrame.Position
+            
+            local direction = (headPos - camPos).Unit
+            local targetCFrame = CFrame.lookAt(camPos, camPos + direction)
+            
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, CONFIG.LockStrength)
+            
+            local statusText = "⬜ " .. currentTarget.Player.Name
+            if currentTarget.Distance <= 50 then
+                statusText = statusText .. " CLOSE"
+            end
+            statusText = statusText .. " (" .. math.floor(currentTarget.Distance) .. "s)"
+            
+            UpdateStatus(statusText)
+        end
     else
-        -- No target in FOV
-        UpdateFOVColors(CONFIG.ActiveColor, CONFIG.ActiveColor, "🟠 NO TARGET")
-        currentTarget = nil
+        if currentTarget then
+            currentTarget = nil
+        end
+        UpdateStatus("⬜ NO TARGET")
     end
 end)
 
@@ -259,4 +325,3 @@ Player.CharacterAdded:Connect(function()
         fovData.FOVFrame.Visible = true
     end
 end)
-
