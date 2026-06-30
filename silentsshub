@@ -47,19 +47,17 @@ local function CreateFOVGUI()
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUD"
     hudFrame.Size = UDim2.new(0, 160, 0, 80)
-    hudFrame.Position = UDim2.new(0.5, -80, -0.15, 0) -- Start hidden above screen
+    hudFrame.Position = UDim2.new(0.5, -80, -0.15, 0)
     hudFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     hudFrame.BackgroundTransparency = 0.15
     hudFrame.BorderSizePixel = 0
     hudFrame.Visible = true
     hudFrame.Parent = screenGui
     
-    -- Blur effect (rounded corners)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 16)
     corner.Parent = hudFrame
     
-    -- Shadow effect
     local shadow = Instance.new("Frame")
     shadow.Name = "Shadow"
     shadow.Size = UDim2.new(1, 0, 1, 0)
@@ -73,7 +71,6 @@ local function CreateFOVGUI()
     shadowCorner.CornerRadius = UDim.new(0, 16)
     shadowCorner.Parent = shadow
     
-    -- FOV label
     local fovLabel = Instance.new("TextLabel")
     fovLabel.Name = "FOVLabel"
     fovLabel.Size = UDim2.new(1, 0, 0.4, 0)
@@ -86,7 +83,6 @@ local function CreateFOVGUI()
     fovLabel.Font = Enum.Font.SourceSansSemibold
     fovLabel.Parent = hudFrame
     
-    -- Size value label
     local sizeLabel = Instance.new("TextLabel")
     sizeLabel.Name = "SizeLabel"
     sizeLabel.Size = UDim2.new(1, 0, 0.6, 0)
@@ -99,7 +95,6 @@ local function CreateFOVGUI()
     sizeLabel.Font = Enum.Font.SourceSansSemibold
     sizeLabel.Parent = hudFrame
     
-    -- Center divider line
     local divider = Instance.new("Frame")
     divider.Name = "Divider"
     divider.Size = UDim2.new(0.7, 0, 0, 1)
@@ -160,7 +155,6 @@ local function CreateFOVGUI()
         })
     end
     
-    -- Status label
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
     statusLabel.Size = UDim2.new(0, 250, 0, 25)
@@ -186,36 +180,32 @@ local function CreateFOVGUI()
     }
 end
 
--- Show HUD with roll down animation
+-- Initialize fovData FIRST
+local fovData = CreateFOVGUI()
+
+-- Now define functions that use fovData
 local function ShowHUD(fovSize)
     local hud = fovData.HUD
     local sizeLabel = fovData.SizeLabel
     
-    -- Update size
     sizeLabel.Text = tostring(fovSize)
     
-    -- Cancel any pending hide
     if fovData.hideTask then
         task.cancel(fovData.hideTask)
         fovData.hideTask = nil
     end
     
-    -- Make sure HUD is visible
     hud.Visible = true
     
-    -- If HUD is hidden (above screen), roll it down
     if not fovData.isHUDVisible then
-        -- Start from above screen
         hud.Position = UDim2.new(0.5, -80, -0.15, 0)
         
-        -- Roll down animation
         local rollDown = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Position = UDim2.new(0.5, -80, 0.05, 0)
         })
         rollDown:Play()
         fovData.isHUDVisible = true
     else
-        -- If already visible, just update the number with a small bounce
         local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             TextSize = 42
         })
@@ -227,31 +217,23 @@ local function ShowHUD(fovSize)
         bounceBack:Play()
     end
     
-    -- Reset timer - hide after 5 seconds
     fovData.hideTask = task.delay(CONFIG.HUDAutoHideDelay, function()
         HideHUD()
     end)
 end
 
--- Hide HUD with roll up animation
 local function HideHUD()
     if not fovData.isHUDVisible then return end
     
     local hud = fovData.HUD
     
-    -- Roll up animation
     local rollUp = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
         Position = UDim2.new(0.5, -80, -0.15, 0)
     })
     rollUp:Play()
     fovData.isHUDVisible = false
-    
-    -- Don't hide completely, just move above screen
-    task.wait(0.5)
-    hud.Visible = true -- Keep visible but above screen
 end
 
--- Rebuild FOV dashes when size changes
 local function RebuildFOV()
     local fovFrame = fovData.FOVFrame
     local circleContainer = fovData.CircleContainer
@@ -301,6 +283,10 @@ local function RebuildFOV()
     
     local statusText = fovData.StatusLabel.Text:gsub("FOV: %d+", "FOV: " .. CONFIG.FOVRadius)
     fovData.StatusLabel.Text = statusText
+end
+
+local function UpdateStatus(text)
+    fovData.StatusLabel.Text = text .. " | FOV: " .. CONFIG.FOVRadius
 end
 
 -- Check if player is downed/ragdolled
@@ -410,13 +396,7 @@ local function GetBestTarget(targets, currentTarget)
     return best, true
 end
 
--- Update status label
-local function UpdateStatus(text)
-    fovData.StatusLabel.Text = text .. " | FOV: " .. CONFIG.FOVRadius
-end
-
--- Initialize
-local fovData = CreateFOVGUI()
+-- Variables
 local isActive = false
 local currentTarget = nil
 local lastSwitchTime = 0
