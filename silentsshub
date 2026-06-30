@@ -1,12 +1,11 @@
 --[[
-    Silent Aim System - iOS Style FOV HUD with Roll Animation
+    Silent Aim System - iOS Style FOV HUD
     - F3 to increase FOV by 10
     - F2 to decrease FOV by 10
-    - iOS/macOS style HUD shows FOV size
+    - Clean iOS/macOS style HUD
     - Rolls down when changing size
-    - Rolls up and disappears after 5s of inactivity
-    - FOV always stays neon white
-    - Press X to toggle ON/OFF
+    - Rolls up after 5s of inactivity
+    - Press X to toggle aimlock
 ]]
 
 local Players = game:GetService("Players")
@@ -43,68 +42,62 @@ local function CreateFOVGUI()
     screenGui.IgnoreGuiInset = true
     screenGui.Parent = Player:WaitForChild("PlayerGui")
     
-    -- iOS Style HUD for FOV size
+    -- iOS Style HUD
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUD"
-    hudFrame.Size = UDim2.new(0, 160, 0, 80)
-    hudFrame.Position = UDim2.new(0.5, -80, -0.15, 0)
-    hudFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    hudFrame.BackgroundTransparency = 0.15
+    hudFrame.Size = UDim2.new(0, 140, 0, 70)
+    hudFrame.Position = UDim2.new(0.5, -70, -0.12, 0)
+    hudFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    hudFrame.BackgroundTransparency = 0.1
     hudFrame.BorderSizePixel = 0
     hudFrame.Visible = true
     hudFrame.Parent = screenGui
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 16)
+    corner.CornerRadius = UDim.new(0, 14)
     corner.Parent = hudFrame
     
-    local shadow = Instance.new("Frame")
-    shadow.Name = "Shadow"
-    shadow.Size = UDim2.new(1, 0, 1, 0)
-    shadow.Position = UDim2.new(0, 0, 0, 0)
-    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    shadow.BackgroundTransparency = 0.9
-    shadow.BorderSizePixel = 0
-    shadow.Parent = hudFrame
+    -- Subtle border
+    local border = Instance.new("Frame")
+    border.Name = "Border"
+    border.Size = UDim2.new(1, 0, 1, 0)
+    border.Position = UDim2.new(0, 0, 0, 0)
+    border.BackgroundTransparency = 1
+    border.BorderSizePixel = 1
+    border.BorderColor3 = Color3.fromRGB(80, 80, 90)
+    border.Parent = hudFrame
     
-    local shadowCorner = Instance.new("UICorner")
-    shadowCorner.CornerRadius = UDim.new(0, 16)
-    shadowCorner.Parent = shadow
+    local borderCorner = Instance.new("UICorner")
+    borderCorner.CornerRadius = UDim.new(0, 14)
+    borderCorner.Parent = border
     
+    -- FOV label
     local fovLabel = Instance.new("TextLabel")
     fovLabel.Name = "FOVLabel"
-    fovLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    fovLabel.Size = UDim2.new(1, 0, 0.35, 0)
     fovLabel.Position = UDim2.new(0, 0, 0, 0)
     fovLabel.BackgroundTransparency = 1
     fovLabel.Text = "FOV"
-    fovLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-    fovLabel.TextSize = 14
+    fovLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
+    fovLabel.TextSize = 12
     fovLabel.TextScaled = false
     fovLabel.Font = Enum.Font.SourceSansSemibold
     fovLabel.Parent = hudFrame
     
+    -- Size value
     local sizeLabel = Instance.new("TextLabel")
     sizeLabel.Name = "SizeLabel"
-    sizeLabel.Size = UDim2.new(1, 0, 0.6, 0)
-    sizeLabel.Position = UDim2.new(0, 0, 0.4, 0)
+    sizeLabel.Size = UDim2.new(1, 0, 0.65, 0)
+    sizeLabel.Position = UDim2.new(0, 0, 0.35, 0)
     sizeLabel.BackgroundTransparency = 1
     sizeLabel.Text = "90"
     sizeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sizeLabel.TextSize = 36
+    sizeLabel.TextSize = 34
     sizeLabel.TextScaled = false
     sizeLabel.Font = Enum.Font.SourceSansSemibold
     sizeLabel.Parent = hudFrame
     
-    local divider = Instance.new("Frame")
-    divider.Name = "Divider"
-    divider.Size = UDim2.new(0.7, 0, 0, 1)
-    divider.Position = UDim2.new(0.15, 0, 0.4, 0)
-    divider.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    divider.BackgroundTransparency = 0.5
-    divider.BorderSizePixel = 0
-    divider.Parent = hudFrame
-    
-    -- Main FOV Circle Frame
+    -- Main FOV Circle
     local fovFrame = Instance.new("Frame")
     fovFrame.Name = "FOVFrame"
     fovFrame.Size = UDim2.new(0, CONFIG.FOVRadius * 2, 0, CONFIG.FOVRadius * 2)
@@ -155,12 +148,13 @@ local function CreateFOVGUI()
         })
     end
     
+    -- Status label
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
     statusLabel.Size = UDim2.new(0, 250, 0, 25)
     statusLabel.Position = UDim2.new(0.5, -125, 1.2, 0)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "⬜ READY | FOV: " .. CONFIG.FOVRadius
+    statusLabel.Text = "○ READY | FOV: " .. CONFIG.FOVRadius
     statusLabel.TextColor3 = CONFIG.FOVColor
     statusLabel.TextSize = 13
     statusLabel.Font = Enum.Font.SourceSansBold
@@ -180,10 +174,9 @@ local function CreateFOVGUI()
     }
 end
 
--- Initialize fovData FIRST
 local fovData = CreateFOVGUI()
 
--- Now define functions that use fovData
+-- Show HUD with roll down
 local function ShowHUD(fovSize)
     local hud = fovData.HUD
     local sizeLabel = fovData.SizeLabel
@@ -198,23 +191,12 @@ local function ShowHUD(fovSize)
     hud.Visible = true
     
     if not fovData.isHUDVisible then
-        hud.Position = UDim2.new(0.5, -80, -0.15, 0)
-        
-        local rollDown = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Position = UDim2.new(0.5, -80, 0.05, 0)
+        hud.Position = UDim2.new(0.5, -70, -0.12, 0)
+        local rollDown = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0.5, -70, 0.05, 0)
         })
         rollDown:Play()
         fovData.isHUDVisible = true
-    else
-        local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            TextSize = 42
-        })
-        bounce:Play()
-        task.wait(0.1)
-        local bounceBack = TweenService:Create(sizeLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            TextSize = 36
-        })
-        bounceBack:Play()
     end
     
     fovData.hideTask = task.delay(CONFIG.HUDAutoHideDelay, function()
@@ -222,18 +204,19 @@ local function ShowHUD(fovSize)
     end)
 end
 
+-- Hide HUD with roll up
 local function HideHUD()
     if not fovData.isHUDVisible then return end
     
     local hud = fovData.HUD
-    
-    local rollUp = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Position = UDim2.new(0.5, -80, -0.15, 0)
+    local rollUp = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -70, -0.12, 0)
     })
     rollUp:Play()
     fovData.isHUDVisible = false
 end
 
+-- Rebuild FOV
 local function RebuildFOV()
     local fovFrame = fovData.FOVFrame
     local circleContainer = fovData.CircleContainer
@@ -289,13 +272,12 @@ local function UpdateStatus(text)
     fovData.StatusLabel.Text = text .. " | FOV: " .. CONFIG.FOVRadius
 end
 
--- Check if player is downed/ragdolled
+-- Check if player is downed
 local function IsPlayerDowned(character)
     if not character then return true end
     
     local humanoid = character:FindFirstChild("Humanoid")
     if not humanoid then return true end
-    
     if humanoid.Health <= 0 then return true end
     
     local state = humanoid:GetState()
@@ -317,7 +299,7 @@ local function IsPlayerDowned(character)
     return false
 end
 
--- Get valid targets
+-- Get targets
 local function GetTargets()
     local targets = {}
     local cameraPos = Camera.CFrame.Position
@@ -353,7 +335,7 @@ local function GetTargets()
     return targets
 end
 
--- Get the best target
+-- Get best target
 local function GetBestTarget(targets, currentTarget)
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
@@ -421,14 +403,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         isActive = not isActive
         
         if isActive then
-            UpdateStatus("⬜ AIMING")
+            UpdateStatus("● AIMING")
         else
-            UpdateStatus("⬜ READY")
+            UpdateStatus("○ READY")
             currentTarget = nil
         end
     end
     
-    -- F3 - Increase FOV
     if input.KeyCode == Enum.KeyCode.F3 then
         local newSize = math.min(CONFIG.FOVRadius + 10, CONFIG.MaxFOV)
         if newSize ~= CONFIG.FOVRadius then
@@ -438,7 +419,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
     
-    -- F2 - Decrease FOV
     if input.KeyCode == Enum.KeyCode.F2 then
         local newSize = math.max(CONFIG.FOVRadius - 10, CONFIG.MinFOV)
         if newSize ~= CONFIG.FOVRadius then
@@ -453,7 +433,7 @@ end)
 RunService.RenderStepped:Connect(function()
     if not isActive then
         if fovData.StatusLabel.Text:find("READY") == nil then
-            UpdateStatus("⬜ READY")
+            UpdateStatus("○ READY")
         end
         return
     end
@@ -466,7 +446,7 @@ RunService.RenderStepped:Connect(function()
     
     if #targets == 0 then
         if currentTarget then
-            UpdateStatus("⬜ NO PLAYERS")
+            UpdateStatus("○ NO PLAYERS")
             currentTarget = nil
         end
         return
@@ -497,7 +477,7 @@ RunService.RenderStepped:Connect(function()
             
             Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, CONFIG.LockStrength)
             
-            local statusText = "⬜ " .. currentTarget.Player.Name
+            local statusText = "● " .. currentTarget.Player.Name
             if currentTarget.Distance <= 50 then
                 statusText = statusText .. " CLOSE"
             end
@@ -509,7 +489,7 @@ RunService.RenderStepped:Connect(function()
         if currentTarget then
             currentTarget = nil
         end
-        UpdateStatus("⬜ NO TARGET")
+        UpdateStatus("○ NO TARGET")
     end
 end)
 
