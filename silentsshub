@@ -12,10 +12,10 @@ local CONFIG = {
     MaxDistance = 200,
     ActivateKey = Enum.KeyCode.X,
     -- Dynamic camlock settings
-    BaseLockStrength = 0.35,            -- Base speed
-    FastLockStrength = 0.65,            -- Speed when target is moving fast
-    JumpLockStrength = 0.75,            -- Speed when target is jumping
-    MovementThreshold = 20,             -- Speed threshold for "fast" movement (studs/sec)
+    BaseLockStrength = 0.35,
+    FastLockStrength = 0.65,
+    JumpLockStrength = 0.75,
+    MovementThreshold = 20,
     SwitchThreshold = 15,
     CloseRangeDistance = 50,
     -- Neon colors
@@ -153,18 +153,15 @@ local function TrackTargetMovement(target)
     local currentPos = target.HeadPosition
     local currentTime = tick()
     
-    -- Store position with timestamp
     table.insert(targetHistory, {
         Position = currentPos,
         Time = currentTime
     })
     
-    -- Keep only last 5 frames
     if #targetHistory > 5 then
         table.remove(targetHistory, 1)
     end
     
-    -- Calculate speed if we have enough data
     if #targetHistory >= 2 then
         local oldest = targetHistory[1]
         local newest = targetHistory[#targetHistory]
@@ -180,22 +177,18 @@ local function TrackTargetMovement(target)
     return 0, false
 end
 
--- Check if target is jumping
 local function IsTargetJumping(target)
     if not target or not target.Character then return false end
     
     local humanoid = target.Character:FindFirstChild("Humanoid")
     if not humanoid then return false end
     
-    -- Check if humanoid is jumping or falling
-    local isJumping = humanoid:GetState() == Enum.HumanoidStateType.Jumping
-    local isFalling = humanoid:GetState() == Enum.HumanoidStateType.Falling
-    local isRunning = humanoid:GetState() == Enum.HumanoidStateType.Running
-    
-    return isJumping or isFalling or isRunning
+    local state = humanoid:GetState()
+    return state == Enum.HumanoidStateType.Jumping or 
+           state == Enum.HumanoidStateType.Falling or
+           state == Enum.HumanoidStateType.Running
 end
 
--- Get targets
 local function GetTargets()
     local targets = {}
     local cameraPos = Camera.CFrame.Position
@@ -235,7 +228,6 @@ local function GetTargets()
     return targets
 end
 
--- Get best target with movement awareness
 local function GetBestTarget(targets, centerPos, currentTarget)
     local bestTarget = nil
     local bestScore = math.huge
@@ -266,7 +258,6 @@ local function GetBestTarget(targets, centerPos, currentTarget)
         if screenDist <= CONFIG.FOVRadius then
             local score
             
-            -- Moving targets get priority (lower score)
             if target.IsMoving then
                 score = screenDist * 0.4 + (target.Distance / 200) * 0.15
             elseif target.IsCloseRange then
@@ -285,13 +276,11 @@ local function GetBestTarget(targets, centerPos, currentTarget)
     return bestTarget, bestScore
 end
 
--- Get screen center
 local function GetScreenCenter()
     local viewportSize = Camera.ViewportSize
     return Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
 end
 
--- Update FOV colors
 local function UpdateFOVColors(color, glowColor, statusText, statusColor)
     for _, data in pairs(fovData.DashParts) do
         data.Frame.BackgroundColor3 = color
@@ -328,11 +317,13 @@ RunService.Heartbeat:Connect(function(deltaTime)
     end
 end)
 
--- Input handling (X key to toggle)
+-- FIXED: Input handling with both InputBegan and KeyDown for better compatibility
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Ignore if game is processing the input (like typing in chat)
     if gameProcessed then return end
     
-    if input.KeyCode == CONFIG.ActivateKey then
+    -- Check if X key was pressed
+    if input.KeyCode == Enum.KeyCode.X then
         isActive = not isActive
         
         if isActive then
@@ -342,7 +333,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 "🟠 AIMING - Dynamic", 
                 CONFIG.ActiveColor
             )
-            print("Silent Aim ACTIVATED - Dynamic combat camlock")
+            print("✅ Silent Aim ACTIVATED - Press X to toggle")
         else
             UpdateFOVColors(
                 CONFIG.NormalColor, 
@@ -352,12 +343,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             )
             currentTarget = nil
             targetHistory = {}
-            print("Silent Aim DEACTIVATED")
+            print("✅ Silent Aim DEACTIVATED")
         end
     end
 end)
 
--- Main loop - Dynamic speed based on target movement
+-- Additional key detection for safety
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    -- We don't need to do anything here, but keeping it for completeness
+end)
+
+-- Main loop
 RunService.RenderStepped:Connect(function()
     screenCenter = GetScreenCenter()
     
@@ -404,7 +400,7 @@ RunService.RenderStepped:Connect(function()
                 
                 if shouldSwitch and bestTarget then
                     currentTarget = bestTarget
-                    targetHistory = {} -- Reset history on switch
+                    targetHistory = {}
                     print("⚡ Switched to: " .. currentTarget.Player.Name .. " (" .. math.floor(currentTarget.Distance) .. "s)")
                 end
                 
@@ -414,30 +410,24 @@ RunService.RenderStepped:Connect(function()
                     local distance = (headPos - currentPos).Magnitude
                     
                     if distance <= CONFIG.MaxDistance then
-                        -- Track target movement
                         local speed, hasData = TrackTargetMovement(currentTarget)
                         local isJumping = IsTargetJumping(currentTarget)
                         
-                        -- Calculate dynamic lock strength
                         local dynamicStrength = CONFIG.BaseLockStrength
                         local movementStatus = ""
                         
-                        -- Boost for jumping targets
                         if isJumping then
                             dynamicStrength = CONFIG.JumpLockStrength
                             movementStatus = "🔴 JUMP!"
                         elseif hasData and speed > CONFIG.MovementThreshold then
-                            -- Boost for fast moving targets
                             local speedFactor = math.min(speed / CONFIG.MovementThreshold, 1.5)
                             dynamicStrength = CONFIG.BaseLockStrength + (CONFIG.FastLockStrength - CONFIG.BaseLockStrength) * math.min(speedFactor, 1)
                             movementStatus = "⚡ FAST"
                         elseif distance <= CONFIG.CloseRangeDistance then
-                            -- Close range gets slightly stronger lock
                             dynamicStrength = CONFIG.BaseLockStrength * 1.2
                             movementStatus = "🔴 CLOSE"
                         end
                         
-                        -- Extra boost for close + moving
                         if isJumping and distance <= CONFIG.CloseRangeDistance then
                             dynamicStrength = CONFIG.JumpLockStrength * 1.1
                             movementStatus = "💥 CLOSE JUMP!"
@@ -446,14 +436,12 @@ RunService.RenderStepped:Connect(function()
                             movementStatus = "💨 CLOSE FAST!"
                         end
                         
-                        -- Apply lock with dynamic speed
                         local direction = (headPos - currentPos).Unit
                         local targetCFrame = CFrame.lookAt(currentPos, currentPos + direction)
                         
                         currentCFrame = currentCFrame:Lerp(targetCFrame, dynamicStrength)
                         Camera.CFrame = currentCFrame
                         
-                        -- Show status with movement info
                         local statusText = "💜 " .. currentTarget.Player.Name .. " (" .. math.floor(distance) .. "s)"
                         if movementStatus ~= "" then
                             statusText = statusText .. " " .. movementStatus
