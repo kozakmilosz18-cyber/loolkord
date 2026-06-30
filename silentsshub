@@ -11,20 +11,21 @@ local CONFIG = {
     FOVRadius = 90,
     MaxDistance = 200,
     ActivateKey = Enum.KeyCode.X,
-    -- Camlock settings
-    LockStrength = 0.15,
-    AimSmoothness = 0.08,
-    SwitchThreshold = 10,
+    -- Optimized camlock settings
+    LockStrength = 0.35,                -- Increased for faster response (was 0.15)
+    AimSmoothness = 0.12,               -- Slightly faster smoothing
+    SwitchThreshold = 15,               -- How much mouse movement to switch targets
+    CloseRangeDistance = 50,            -- Distance considered "close range"
+    TargetPriority = "closest",         -- Prioritize closest targets
     -- Neon colors
     NormalColor = Color3.fromRGB(255, 255, 255),
     NormalGlowColor = Color3.fromRGB(200, 200, 255),
     ActiveColor = Color3.fromRGB(255, 200, 100),
     TargetColor = Color3.fromRGB(180, 0, 255),
     TargetGlowColor = Color3.fromRGB(220, 100, 255),
-    DashLength = 6,                     -- Reduced from 8 to 6 (thinner)
-    GapLength = 12,                     -- Increased from 10 to 12 (more space)
+    DashLength = 6,
+    GapLength = 12,
     RotationSpeed = 180,
-    TargetPriority = "closest",
 }
 
 -- Create FOV GUI
@@ -72,7 +73,6 @@ local function CreateFOVGUI()
         local x = CONFIG.FOVRadius * math.cos(angle)
         local y = CONFIG.FOVRadius * math.sin(angle)
         
-        -- Ultra thin main dash (height reduced from 1.5 to 1.0)
         local dash = Instance.new("Frame")
         dash.Name = "Dash_" .. i
         dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
@@ -83,7 +83,6 @@ local function CreateFOVGUI()
         dash.Rotation = math.deg(angle)
         dash.Parent = circleContainer
         
-        -- Thinner neon glow
         local glow = Instance.new("Frame")
         glow.Name = "Glow"
         glow.Size = UDim2.new(1, 4, 1, 4)
@@ -93,7 +92,6 @@ local function CreateFOVGUI()
         glow.BorderSizePixel = 0
         glow.Parent = dash
         
-        -- Extra glow layer (thinner)
         local glow2 = Instance.new("Frame")
         glow2.Name = "Glow2"
         glow2.Size = UDim2.new(1, 8, 1, 8)
@@ -151,10 +149,14 @@ local function CreateFOVGUI()
     }
 end
 
--- Get valid targets
+-- Get valid targets with enhanced prioritization
 local function GetTargets()
     local targets = {}
     local cameraPos = Camera.CFrame.Position
+    local character = Player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    
+    if not rootPart then return targets end
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= Player and player.Character then
@@ -173,7 +175,8 @@ local function GetTargets()
                             Head = head,
                             HeadScreenPos = Vector2.new(headPos.X, headPos.Y),
                             Distance = distance,
-                            HeadPosition = head.Position
+                            HeadPosition = head.Position,
+                            IsCloseRange = distance <= CONFIG.CloseRangeDistance
                         })
                     end
                 end
@@ -184,16 +187,48 @@ local function GetTargets()
     return targets
 end
 
--- Get the best target
-local function GetBestTarget(targets, centerPos)
+-- Get the best target with close-range priority
+local function GetBestTarget(targets, centerPos, currentTarget)
     local bestTarget = nil
     local bestScore = math.huge
     
+    -- First, check if we have a current target and it's still valid
+    if currentTarget then
+        local stillValid = false
+        local currentDist = 0
+        
+        for _, target in pairs(targets) do
+            if target.Player == currentTarget.Player then
+                local screenDist = (target.HeadScreenPos - centerPos).Magnitude
+                if screenDist <= CONFIG.FOVRadius then
+                    stillValid = true
+                    currentDist = target.Distance
+                    break
+                end
+            end
+        end
+        
+        -- If current target is still valid and close, keep it
+        if stillValid and currentDist <= CONFIG.CloseRangeDistance then
+            return currentTarget, 0
+        end
+    end
+    
+    -- Find the best target
     for _, target in pairs(targets) do
         local screenDist = (target.HeadScreenPos - centerPos).Magnitude
         
         if screenDist <= CONFIG.FOVRadius then
-            local score = screenDist * 0.7 + (target.Distance / 200) * 0.3
+            -- Calculate score - prioritize close range targets
+            local score
+            
+            if target.IsCloseRange then
+                -- Close range targets get priority (lower score is better)
+                score = screenDist * 0.5 + (target.Distance / 200) * 0.1
+            else
+                -- Far targets need to be closer to center
+                score = screenDist * 0.8 + (target.Distance / 200) * 0.3
+            end
             
             if score < bestScore then
                 bestScore = score
@@ -231,6 +266,7 @@ local isActive = false
 local currentTarget = nil
 local screenCenter = GetScreenCenter()
 local currentCFrame = Camera.CFrame
+local targetSwitchTimer = 0
 
 -- Rotation animation
 RunService.Heartbeat:Connect(function(deltaTime)
@@ -262,7 +298,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 "🟠 AIMING", 
                 CONFIG.ActiveColor
             )
-            print("Silent Aim ACTIVATED - Ultra thin FOV")
+            print("Silent Aim ACTIVATED - Optimized dynamic aimlock")
         else
             UpdateFOVColors(
                 CONFIG.NormalColor, 
@@ -276,7 +312,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Main loop
+-- Main loop - Optimized for dynamic response
 RunService.RenderStepped:Connect(function()
     screenCenter = GetScreenCenter()
     
@@ -287,7 +323,8 @@ RunService.RenderStepped:Connect(function()
         local targets = GetTargets()
         
         if #targets > 0 then
-            local bestTarget, score = GetBestTarget(targets, screenCenter)
+            -- Get best target with close-range priority
+            local bestTarget, score = GetBestTarget(targets, screenCenter, currentTarget)
             
             if bestTarget then
                 local shouldSwitch = false
@@ -295,12 +332,24 @@ RunService.RenderStepped:Connect(function()
                 if not currentTarget then
                     shouldSwitch = true
                 else
+                    -- Check if current target is still valid
                     local currentHeadPos, onScreen = Camera:WorldToViewportPoint(currentTarget.Head.Position)
                     local currentValid = onScreen and (Vector2.new(currentHeadPos.X, currentHeadPos.Y) - screenCenter).Magnitude <= CONFIG.FOVRadius
                     
-                    local isDifferent = bestTarget.Player ~= currentTarget.Player
+                    -- If current target is close range, be more lenient with switching
+                    local isCurrentClose = currentTarget.Distance <= CONFIG.CloseRangeDistance
                     
-                    if isDifferent then
+                    if isCurrentClose and currentValid then
+                        -- Don't switch away from close targets unless you move mouse significantly
+                        local currentScreenDist = (currentTarget.HeadScreenPos - screenCenter).Magnitude
+                        local bestScreenDist = (bestTarget.HeadScreenPos - screenCenter).Magnitude
+                        
+                        if bestTarget.Player ~= currentTarget.Player and 
+                           bestScreenDist < currentScreenDist - CONFIG.SwitchThreshold * 1.5 then
+                            shouldSwitch = true
+                        end
+                    elseif bestTarget.Player ~= currentTarget.Player then
+                        -- Normal switching logic for far targets
                         if not currentValid then
                             shouldSwitch = true
                         else
@@ -315,7 +364,7 @@ RunService.RenderStepped:Connect(function()
                 
                 if shouldSwitch and bestTarget then
                     currentTarget = bestTarget
-                    print("⚡ Switched to: " .. currentTarget.Player.Name)
+                    print("⚡ Switched to: " .. currentTarget.Player.Name .. " (" .. math.floor(currentTarget.Distance) .. "s)")
                 end
                 
                 if currentTarget then
@@ -324,16 +373,27 @@ RunService.RenderStepped:Connect(function()
                     local distance = (headPos - currentPos).Magnitude
                     
                     if distance <= CONFIG.MaxDistance then
+                        -- Calculate dynamic lock strength based on distance
+                        local dynamicStrength = CONFIG.LockStrength
+                        
+                        -- Closer targets get slightly stronger lock
+                        if distance <= CONFIG.CloseRangeDistance then
+                            dynamicStrength = CONFIG.LockStrength * 1.2
+                        end
+                        
                         local direction = (headPos - currentPos).Unit
                         local targetCFrame = CFrame.lookAt(currentPos, currentPos + direction)
                         
-                        currentCFrame = currentCFrame:Lerp(targetCFrame, CONFIG.LockStrength)
+                        -- Apply dynamic smoothing
+                        currentCFrame = currentCFrame:Lerp(targetCFrame, dynamicStrength)
                         Camera.CFrame = currentCFrame
                         
+                        -- Show target info
+                        local rangeText = distance <= CONFIG.CloseRangeDistance and "🔴 CLOSE" or "🟡"
                         UpdateFOVColors(
                             CONFIG.TargetColor,
                             CONFIG.TargetGlowColor,
-                            "💜 " .. currentTarget.Player.Name .. " (" .. math.floor(distance) .. "s)",
+                            "💜 " .. currentTarget.Player.Name .. " (" .. math.floor(distance) .. "s) " .. rangeText,
                             CONFIG.TargetColor
                         )
                     else
