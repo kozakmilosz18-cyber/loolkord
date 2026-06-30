@@ -3,8 +3,9 @@
     - F3 to increase FOV by 10
     - F2 to decrease FOV by 10
     - Clean iOS/macOS style HUD
-    - Rolls down when changing size
-    - Rolls up after 5s of inactivity
+    - Stretched horizontal design
+    - Stays open while adjusting FOV
+    - Closes after 5s of inactivity
     - Press X to toggle aimlock
 ]]
 
@@ -42,60 +43,100 @@ local function CreateFOVGUI()
     screenGui.IgnoreGuiInset = true
     screenGui.Parent = Player:WaitForChild("PlayerGui")
     
-    -- iOS Style HUD - Pure Black
+    -- iOS Style HUD - Stretched horizontal
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUD"
-    hudFrame.Size = UDim2.new(0, 140, 0, 70)
-    hudFrame.Position = UDim2.new(0.5, -70, -0.12, 0)
+    hudFrame.Size = UDim2.new(0, 200, 0, 65)
+    hudFrame.Position = UDim2.new(0.5, -100, -0.12, 0)
     hudFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    hudFrame.BackgroundTransparency = 0.05
+    hudFrame.BackgroundTransparency = 0.08
     hudFrame.BorderSizePixel = 0
     hudFrame.Visible = false
     hudFrame.Parent = screenGui
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 14)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = hudFrame
     
-    -- Subtle border
+    -- Subtle border with slight glow
     local border = Instance.new("Frame")
     border.Name = "Border"
     border.Size = UDim2.new(1, 0, 1, 0)
     border.Position = UDim2.new(0, 0, 0, 0)
     border.BackgroundTransparency = 1
     border.BorderSizePixel = 1
-    border.BorderColor3 = Color3.fromRGB(60, 60, 70)
+    border.BorderColor3 = Color3.fromRGB(80, 80, 100)
     border.Parent = hudFrame
     
     local borderCorner = Instance.new("UICorner")
-    borderCorner.CornerRadius = UDim.new(0, 14)
+    borderCorner.CornerRadius = UDim.new(0, 12)
     borderCorner.Parent = border
     
-    -- FOV label - Dark Purple
+    -- Inner subtle glow line
+    local innerGlow = Instance.new("Frame")
+    innerGlow.Name = "InnerGlow"
+    innerGlow.Size = UDim2.new(0.85, 0, 0, 0.5)
+    innerGlow.Position = UDim2.new(0.075, 0, 0.5, 0)
+    innerGlow.BackgroundColor3 = Color3.fromRGB(160, 80, 200)
+    innerGlow.BackgroundTransparency = 0.7
+    innerGlow.BorderSizePixel = 0
+    innerGlow.Parent = hudFrame
+    
+    -- FOV label - left aligned
     local fovLabel = Instance.new("TextLabel")
     fovLabel.Name = "FOVLabel"
-    fovLabel.Size = UDim2.new(1, 0, 0.35, 0)
-    fovLabel.Position = UDim2.new(0, 0, 0, 0)
+    fovLabel.Size = UDim2.new(0, 50, 1, 0)
+    fovLabel.Position = UDim2.new(0, 15, 0, 0)
     fovLabel.BackgroundTransparency = 1
     fovLabel.Text = "FOV"
     fovLabel.TextColor3 = Color3.fromRGB(160, 80, 200)
-    fovLabel.TextSize = 12
+    fovLabel.TextSize = 13
     fovLabel.TextScaled = false
+    fovLabel.TextXAlignment = Enum.TextXAlignment.Left
     fovLabel.Font = Enum.Font.SourceSansSemibold
     fovLabel.Parent = hudFrame
     
-    -- Size value - Lighter Purple (more visible)
+    -- Size value - centered with spacing
     local sizeLabel = Instance.new("TextLabel")
     sizeLabel.Name = "SizeLabel"
-    sizeLabel.Size = UDim2.new(1, 0, 0.65, 0)
-    sizeLabel.Position = UDim2.new(0, 0, 0.35, 0)
+    sizeLabel.Size = UDim2.new(0, 80, 1, 0)
+    sizeLabel.Position = UDim2.new(0, 70, 0, 0)
     sizeLabel.BackgroundTransparency = 1
     sizeLabel.Text = "90"
     sizeLabel.TextColor3 = Color3.fromRGB(200, 140, 230)
-    sizeLabel.TextSize = 34
+    sizeLabel.TextSize = 36
     sizeLabel.TextScaled = false
+    sizeLabel.TextXAlignment = Enum.TextXAlignment.Center
     sizeLabel.Font = Enum.Font.SourceSansSemibold
     sizeLabel.Parent = hudFrame
+    
+    -- FOV icon (small circle indicator)
+    local icon = Instance.new("Frame")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 8, 0, 8)
+    icon.Position = UDim2.new(0, 175, 0, 28)
+    icon.BackgroundColor3 = Color3.fromRGB(160, 80, 200)
+    icon.BackgroundTransparency = 0.2
+    icon.BorderSizePixel = 0
+    icon.Parent = hudFrame
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(1, 0)
+    iconCorner.Parent = icon
+    
+    -- Icon glow
+    local iconGlow = Instance.new("Frame")
+    iconGlow.Name = "IconGlow"
+    iconGlow.Size = UDim2.new(1, 6, 1, 6)
+    iconGlow.Position = UDim2.new(0.5, -3, 0.5, -3)
+    iconGlow.BackgroundColor3 = Color3.fromRGB(160, 80, 200)
+    iconGlow.BackgroundTransparency = 0.85
+    iconGlow.BorderSizePixel = 0
+    iconGlow.Parent = icon
+    
+    local iconGlowCorner = Instance.new("UICorner")
+    iconGlowCorner.CornerRadius = UDim.new(1, 0)
+    iconGlowCorner.Parent = iconGlow
     
     -- Main FOV Circle
     local fovFrame = Instance.new("Frame")
@@ -148,11 +189,11 @@ local function CreateFOVGUI()
         })
     end
     
-    -- Status label - Dark Purple
+    -- Status label
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(0, 250, 0, 25)
-    statusLabel.Position = UDim2.new(0.5, -125, 1.2, 0)
+    statusLabel.Size = UDim2.new(0, 280, 0, 25)
+    statusLabel.Position = UDim2.new(0.5, -140, 1.2, 0)
     statusLabel.BackgroundTransparency = 1
     statusLabel.Text = "○ READY | FOV: " .. CONFIG.FOVRadius
     statusLabel.TextColor3 = Color3.fromRGB(180, 120, 210)
@@ -176,40 +217,65 @@ end
 
 local fovData = CreateFOVGUI()
 
--- Show HUD with roll down
-local function ShowHUD(fovSize)
+-- Open HUD with roll down
+local function OpenHUD()
     local hud = fovData.HUD
-    local sizeLabel = fovData.SizeLabel
     
+    if fovData.isHUDVisible then return end
+    
+    hud.Visible = true
+    hud.Position = UDim2.new(0.5, -100, -0.12, 0)
+    
+    local rollDown = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -100, 0.05, 0)
+    })
+    rollDown:Play()
+    fovData.isHUDVisible = true
+end
+
+-- Update HUD number
+local function UpdateHUDNumber(fovSize)
+    local sizeLabel = fovData.SizeLabel
     sizeLabel.Text = tostring(fovSize)
     
+    -- Subtle bounce
+    local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        TextSize = 39
+    })
+    bounce:Play()
+    task.wait(0.08)
+    local bounceBack = TweenService:Create(sizeLabel, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        TextSize = 36
+    })
+    bounceBack:Play()
+end
+
+-- Show HUD
+local function ShowHUD(fovSize)
     if fovData.hideTask then
         task.cancel(fovData.hideTask)
         fovData.hideTask = nil
     end
     
-    hud.Visible = true
-    hud.Position = UDim2.new(0.5, -70, -0.12, 0)
+    if not fovData.isHUDVisible then
+        OpenHUD()
+    end
     
-    local rollDown = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, -70, 0.05, 0)
-    })
-    rollDown:Play()
-    fovData.isHUDVisible = true
+    UpdateHUDNumber(fovSize)
     
     fovData.hideTask = task.delay(CONFIG.HUDAutoHideDelay, function()
         HideHUD()
     end)
 end
 
--- Hide HUD with roll up
+-- Hide HUD
 local function HideHUD()
     if not fovData.isHUDVisible then return end
     
     local hud = fovData.HUD
     
     local rollUp = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Position = UDim2.new(0.5, -70, -0.12, 0)
+        Position = UDim2.new(0.5, -100, -0.12, 0)
     })
     rollUp:Play()
     fovData.isHUDVisible = false
