@@ -4,6 +4,7 @@
     - Press X to toggle ON/OFF
     - Ignores downed/ragdolled players
     - Stable targeting - no crazy switching
+    - Lower aimlock strength for smoother tracking
     - FOV: 90px at screen center
 ]]
 
@@ -20,7 +21,7 @@ local CONFIG = {
     FOVRadius = 90,
     MaxDistance = 200,
     ActivateKey = Enum.KeyCode.X,
-    LockStrength = 0.3,
+    LockStrength = 0.15,
     SwitchCooldown = 0.5,
     MinScreenDistDiff = 15,
     FOVColor = Color3.fromRGB(255, 255, 255),
