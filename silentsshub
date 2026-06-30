@@ -1,0 +1,393 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+
+-- Configuration
+local CONFIG = {
+    FOVRadius = 90,
+    MaxDistance = 200,
+    ActivateKey = Enum.KeyCode.X,
+    -- Camlock settings
+    LockStrength = 0.15,
+    AimSmoothness = 0.08,
+    SwitchThreshold = 10,
+    -- Neon colors
+    NormalColor = Color3.fromRGB(255, 255, 255),
+    NormalGlowColor = Color3.fromRGB(200, 200, 255),
+    ActiveColor = Color3.fromRGB(255, 200, 100),
+    TargetColor = Color3.fromRGB(180, 0, 255),
+    TargetGlowColor = Color3.fromRGB(220, 100, 255),
+    DashLength = 6,                     -- Reduced from 8 to 6 (thinner)
+    GapLength = 12,                     -- Increased from 10 to 12 (more space)
+    RotationSpeed = 180,
+    TargetPriority = "closest",
+}
+
+-- Create FOV GUI
+local function CreateFOVGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SilentAimFOV"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.Parent = Player:WaitForChild("PlayerGui")
+    
+    -- Dark background
+    local bgFrame = Instance.new("Frame")
+    bgFrame.Name = "Background"
+    bgFrame.Size = UDim2.new(1, 0, 1, 0)
+    bgFrame.Position = UDim2.new(0, 0, 0, 0)
+    bgFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bgFrame.BackgroundTransparency = 0.85
+    bgFrame.BorderSizePixel = 0
+    bgFrame.Parent = screenGui
+    
+    -- Main FOV Circle Frame - Centered on screen
+    local fovFrame = Instance.new("Frame")
+    fovFrame.Name = "FOVFrame"
+    fovFrame.Size = UDim2.new(0, CONFIG.FOVRadius * 2, 0, CONFIG.FOVRadius * 2)
+    fovFrame.Position = UDim2.new(0.5, -CONFIG.FOVRadius, 0.5, -CONFIG.FOVRadius)
+    fovFrame.BackgroundTransparency = 1
+    fovFrame.ClipsDescendants = true
+    fovFrame.Parent = screenGui
+    
+    -- Create rotating dashed circle
+    local circleContainer = Instance.new("Frame")
+    circleContainer.Name = "CircleContainer"
+    circleContainer.Size = UDim2.new(1, 0, 1, 0)
+    circleContainer.Position = UDim2.new(0, 0, 0, 0)
+    circleContainer.BackgroundTransparency = 1
+    circleContainer.Parent = fovFrame
+    
+    -- Create ultra thin dashes with neon glow
+    local dashParts = {}
+    local numDashes = math.floor((2 * math.pi * CONFIG.FOVRadius) / (CONFIG.DashLength + CONFIG.GapLength))
+    local angleStep = (2 * math.pi) / numDashes
+    
+    for i = 1, numDashes do
+        local angle = i * angleStep
+        local x = CONFIG.FOVRadius * math.cos(angle)
+        local y = CONFIG.FOVRadius * math.sin(angle)
+        
+        -- Ultra thin main dash (height reduced from 1.5 to 1.0)
+        local dash = Instance.new("Frame")
+        dash.Name = "Dash_" .. i
+        dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
+        dash.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
+        dash.BackgroundColor3 = CONFIG.NormalColor
+        dash.BackgroundTransparency = 0.1
+        dash.BorderSizePixel = 0
+        dash.Rotation = math.deg(angle)
+        dash.Parent = circleContainer
+        
+        -- Thinner neon glow
+        local glow = Instance.new("Frame")
+        glow.Name = "Glow"
+        glow.Size = UDim2.new(1, 4, 1, 4)
+        glow.Position = UDim2.new(0.5, -2, 0.5, -2)
+        glow.BackgroundColor3 = CONFIG.NormalGlowColor
+        glow.BackgroundTransparency = 0.8
+        glow.BorderSizePixel = 0
+        glow.Parent = dash
+        
+        -- Extra glow layer (thinner)
+        local glow2 = Instance.new("Frame")
+        glow2.Name = "Glow2"
+        glow2.Size = UDim2.new(1, 8, 1, 8)
+        glow2.Position = UDim2.new(0.5, -4, 0.5, -4)
+        glow2.BackgroundColor3 = CONFIG.NormalGlowColor
+        glow2.BackgroundTransparency = 0.9
+        glow2.BorderSizePixel = 0
+        glow2.Parent = dash
+        
+        table.insert(dashParts, {
+            Frame = dash,
+            Glow = glow,
+            Glow2 = glow2,
+            Angle = angle,
+            X = x,
+            Y = y
+        })
+    end
+    
+    -- Status label
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(0, 190, 0, 25)
+    statusLabel.Position = UDim2.new(0.5, -95, 1.2, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "⬜ READY"
+    statusLabel.TextColor3 = CONFIG.NormalColor
+    statusLabel.TextSize = 13
+    statusLabel.TextScaled = false
+    statusLabel.Font = Enum.Font.SourceSansBold
+    statusLabel.Parent = fovFrame
+    
+    local statusShadow = Instance.new("TextLabel")
+    statusShadow.Name = "StatusShadow"
+    statusShadow.Size = UDim2.new(0, 190, 0, 25)
+    statusShadow.Position = UDim2.new(0.5, -95, 1.2, 0)
+    statusShadow.BackgroundTransparency = 1
+    statusShadow.Text = "⬜ READY"
+    statusShadow.TextColor3 = CONFIG.NormalGlowColor
+    statusShadow.TextSize = 13
+    statusShadow.TextScaled = false
+    statusShadow.Font = Enum.Font.SourceSansBold
+    statusShadow.TextTransparency = 0.5
+    statusShadow.Parent = fovFrame
+    
+    return {
+        ScreenGui = screenGui,
+        FOVFrame = fovFrame,
+        CircleContainer = circleContainer,
+        DashParts = dashParts,
+        StatusLabel = statusLabel,
+        StatusShadow = statusShadow,
+        Rotation = 0,
+        Radius = CONFIG.FOVRadius,
+    }
+end
+
+-- Get valid targets
+local function GetTargets()
+    local targets = {}
+    local cameraPos = Camera.CFrame.Position
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local head = player.Character:FindFirstChild("Head")
+            
+            if humanoid and head and humanoid.Health > 0 then
+                local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local distance = (head.Position - cameraPos).Magnitude
+                    if distance <= CONFIG.MaxDistance then
+                        table.insert(targets, {
+                            Player = player,
+                            Character = player.Character,
+                            Humanoid = humanoid,
+                            Head = head,
+                            HeadScreenPos = Vector2.new(headPos.X, headPos.Y),
+                            Distance = distance,
+                            HeadPosition = head.Position
+                        })
+                    end
+                end
+            end
+        end
+    end
+    
+    return targets
+end
+
+-- Get the best target
+local function GetBestTarget(targets, centerPos)
+    local bestTarget = nil
+    local bestScore = math.huge
+    
+    for _, target in pairs(targets) do
+        local screenDist = (target.HeadScreenPos - centerPos).Magnitude
+        
+        if screenDist <= CONFIG.FOVRadius then
+            local score = screenDist * 0.7 + (target.Distance / 200) * 0.3
+            
+            if score < bestScore then
+                bestScore = score
+                bestTarget = target
+            end
+        end
+    end
+    
+    return bestTarget, bestScore
+end
+
+-- Get screen center
+local function GetScreenCenter()
+    local viewportSize = Camera.ViewportSize
+    return Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+end
+
+-- Update FOV colors
+local function UpdateFOVColors(color, glowColor, statusText, statusColor)
+    for _, data in pairs(fovData.DashParts) do
+        data.Frame.BackgroundColor3 = color
+        data.Glow.BackgroundColor3 = glowColor or color
+        data.Glow2.BackgroundColor3 = glowColor or color
+    end
+    
+    fovData.StatusLabel.Text = statusText
+    fovData.StatusLabel.TextColor3 = statusColor or color
+    fovData.StatusShadow.Text = statusText
+    fovData.StatusShadow.TextColor3 = glowColor or color
+end
+
+-- Initialize
+local fovData = CreateFOVGUI()
+local isActive = false
+local currentTarget = nil
+local screenCenter = GetScreenCenter()
+local currentCFrame = Camera.CFrame
+
+-- Rotation animation
+RunService.Heartbeat:Connect(function(deltaTime)
+    fovData.Rotation = (fovData.Rotation + CONFIG.RotationSpeed * deltaTime) % 360
+    
+    local angleOffset = math.rad(fovData.Rotation)
+    
+    for _, data in pairs(fovData.DashParts) do
+        local angle = data.Angle + angleOffset
+        local x = CONFIG.FOVRadius * math.cos(angle)
+        local y = CONFIG.FOVRadius * math.sin(angle)
+        
+        data.Frame.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
+        data.Frame.Rotation = math.deg(angle)
+    end
+end)
+
+-- Input handling (X key to toggle)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == CONFIG.ActivateKey then
+        isActive = not isActive
+        
+        if isActive then
+            UpdateFOVColors(
+                CONFIG.ActiveColor, 
+                CONFIG.ActiveColor, 
+                "🟠 AIMING", 
+                CONFIG.ActiveColor
+            )
+            print("Silent Aim ACTIVATED - Ultra thin FOV")
+        else
+            UpdateFOVColors(
+                CONFIG.NormalColor, 
+                CONFIG.NormalGlowColor, 
+                "⬜ READY", 
+                CONFIG.NormalColor
+            )
+            currentTarget = nil
+            print("Silent Aim DEACTIVATED")
+        end
+    end
+end)
+
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    screenCenter = GetScreenCenter()
+    
+    if isActive and Player.Character then
+        local humanoid = Player.Character:FindFirstChild("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then return end
+        
+        local targets = GetTargets()
+        
+        if #targets > 0 then
+            local bestTarget, score = GetBestTarget(targets, screenCenter)
+            
+            if bestTarget then
+                local shouldSwitch = false
+                
+                if not currentTarget then
+                    shouldSwitch = true
+                else
+                    local currentHeadPos, onScreen = Camera:WorldToViewportPoint(currentTarget.Head.Position)
+                    local currentValid = onScreen and (Vector2.new(currentHeadPos.X, currentHeadPos.Y) - screenCenter).Magnitude <= CONFIG.FOVRadius
+                    
+                    local isDifferent = bestTarget.Player ~= currentTarget.Player
+                    
+                    if isDifferent then
+                        if not currentValid then
+                            shouldSwitch = true
+                        else
+                            local currentScreenDist = (currentTarget.HeadScreenPos - screenCenter).Magnitude
+                            local bestScreenDist = (bestTarget.HeadScreenPos - screenCenter).Magnitude
+                            if bestScreenDist < currentScreenDist - CONFIG.SwitchThreshold then
+                                shouldSwitch = true
+                            end
+                        end
+                    end
+                end
+                
+                if shouldSwitch and bestTarget then
+                    currentTarget = bestTarget
+                    print("⚡ Switched to: " .. currentTarget.Player.Name)
+                end
+                
+                if currentTarget then
+                    local headPos = currentTarget.Head.Position
+                    local currentPos = Camera.CFrame.Position
+                    local distance = (headPos - currentPos).Magnitude
+                    
+                    if distance <= CONFIG.MaxDistance then
+                        local direction = (headPos - currentPos).Unit
+                        local targetCFrame = CFrame.lookAt(currentPos, currentPos + direction)
+                        
+                        currentCFrame = currentCFrame:Lerp(targetCFrame, CONFIG.LockStrength)
+                        Camera.CFrame = currentCFrame
+                        
+                        UpdateFOVColors(
+                            CONFIG.TargetColor,
+                            CONFIG.TargetGlowColor,
+                            "💜 " .. currentTarget.Player.Name .. " (" .. math.floor(distance) .. "s)",
+                            CONFIG.TargetColor
+                        )
+                    else
+                        currentTarget = nil
+                        UpdateFOVColors(
+                            CONFIG.ActiveColor,
+                            CONFIG.ActiveColor,
+                            "🟠 Too far",
+                            CONFIG.ActiveColor
+                        )
+                    end
+                else
+                    UpdateFOVColors(
+                        CONFIG.ActiveColor,
+                        CONFIG.ActiveColor,
+                        "🟠 No target",
+                        CONFIG.ActiveColor
+                    )
+                end
+            else
+                currentTarget = nil
+                UpdateFOVColors(
+                    CONFIG.ActiveColor,
+                    CONFIG.ActiveColor,
+                    "🟠 No targets in FOV",
+                    CONFIG.ActiveColor
+                )
+            end
+        else
+            currentTarget = nil
+            UpdateFOVColors(
+                CONFIG.ActiveColor,
+                CONFIG.ActiveColor,
+                "🟠 NO PLAYERS",
+                CONFIG.ActiveColor
+            )
+        end
+    elseif not isActive then
+        if fovData.StatusLabel.Text ~= "⬜ READY" then
+            UpdateFOVColors(
+                CONFIG.NormalColor,
+                CONFIG.NormalGlowColor,
+                "⬜ READY",
+                CONFIG.NormalColor
+            )
+        end
+        currentCFrame = Camera.CFrame
+    end
+end)
+
+-- Cleanup
+Player.CharacterAdded:Connect(function()
+    wait(0.5)
+    if fovData.FOVFrame then
+        fovData.FOVFrame.Visible = true
+    end
+end)
