@@ -3,6 +3,7 @@
     - F3 to increase FOV by 10
     - F2 to decrease FOV by 10
     - Clean iOS/macOS style HUD
+    - Purple FOV circle matching text colors
     - Stretched horizontal design
     - Stays open while adjusting FOV
     - Closes after 5s of inactivity
@@ -27,8 +28,9 @@ local CONFIG = {
     ActivateKey = Enum.KeyCode.X,
     LockStrength = 0.15,
     SwitchCooldown = 0.5,
-    FOVColor = Color3.fromRGB(255, 255, 255),
-    FOVGlowColor = Color3.fromRGB(200, 200, 255),
+    -- Purple FOV colors matching text
+    FOVColor = Color3.fromRGB(200, 140, 230),
+    FOVGlowColor = Color3.fromRGB(160, 80, 200),
     DashLength = 6,
     GapLength = 12,
     RotationSpeed = 180,
@@ -58,7 +60,6 @@ local function CreateFOVGUI()
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = hudFrame
     
-    -- Subtle border with slight glow
     local border = Instance.new("Frame")
     border.Name = "Border"
     border.Size = UDim2.new(1, 0, 1, 0)
@@ -72,7 +73,6 @@ local function CreateFOVGUI()
     borderCorner.CornerRadius = UDim.new(0, 12)
     borderCorner.Parent = border
     
-    -- Inner subtle glow line
     local innerGlow = Instance.new("Frame")
     innerGlow.Name = "InnerGlow"
     innerGlow.Size = UDim2.new(0.85, 0, 0, 0.5)
@@ -82,7 +82,6 @@ local function CreateFOVGUI()
     innerGlow.BorderSizePixel = 0
     innerGlow.Parent = hudFrame
     
-    -- FOV label - left aligned
     local fovLabel = Instance.new("TextLabel")
     fovLabel.Name = "FOVLabel"
     fovLabel.Size = UDim2.new(0, 50, 1, 0)
@@ -96,7 +95,6 @@ local function CreateFOVGUI()
     fovLabel.Font = Enum.Font.SourceSansSemibold
     fovLabel.Parent = hudFrame
     
-    -- Size value - centered with spacing
     local sizeLabel = Instance.new("TextLabel")
     sizeLabel.Name = "SizeLabel"
     sizeLabel.Size = UDim2.new(0, 80, 1, 0)
@@ -110,7 +108,6 @@ local function CreateFOVGUI()
     sizeLabel.Font = Enum.Font.SourceSansSemibold
     sizeLabel.Parent = hudFrame
     
-    -- FOV icon (small circle indicator)
     local icon = Instance.new("Frame")
     icon.Name = "Icon"
     icon.Size = UDim2.new(0, 8, 0, 8)
@@ -124,7 +121,6 @@ local function CreateFOVGUI()
     iconCorner.CornerRadius = UDim.new(1, 0)
     iconCorner.Parent = icon
     
-    -- Icon glow
     local iconGlow = Instance.new("Frame")
     iconGlow.Name = "IconGlow"
     iconGlow.Size = UDim2.new(1, 6, 1, 6)
@@ -168,17 +164,17 @@ local function CreateFOVGUI()
         dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
         dash.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
         dash.BackgroundColor3 = CONFIG.FOVColor
-        dash.BackgroundTransparency = 0.1
+        dash.BackgroundTransparency = 0.15
         dash.BorderSizePixel = 0
         dash.Rotation = math.deg(angle)
         dash.Parent = circleContainer
         
         local glow = Instance.new("Frame")
         glow.Name = "Glow"
-        glow.Size = UDim2.new(1, 4, 1, 4)
-        glow.Position = UDim2.new(0.5, -2, 0.5, -2)
+        glow.Size = UDim2.new(1, 6, 1, 6)
+        glow.Position = UDim2.new(0.5, -3, 0.5, -3)
         glow.BackgroundColor3 = CONFIG.FOVGlowColor
-        glow.BackgroundTransparency = 0.8
+        glow.BackgroundTransparency = 0.75
         glow.BorderSizePixel = 0
         glow.Parent = dash
         
@@ -189,7 +185,6 @@ local function CreateFOVGUI()
         })
     end
     
-    -- Status label
     local statusLabel = Instance.new("TextLabel")
     statusLabel.Name = "StatusLabel"
     statusLabel.Size = UDim2.new(0, 280, 0, 25)
@@ -211,7 +206,7 @@ local function CreateFOVGUI()
         SizeLabel = sizeLabel,
         Rotation = 0,
         isHUDVisible = false,
-        hideTask = nil,
+        hideTimer = nil,
     }
 end
 
@@ -238,7 +233,6 @@ local function UpdateHUDNumber(fovSize)
     local sizeLabel = fovData.SizeLabel
     sizeLabel.Text = tostring(fovSize)
     
-    -- Subtle bounce
     local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         TextSize = 39
     })
@@ -252,9 +246,9 @@ end
 
 -- Show HUD
 local function ShowHUD(fovSize)
-    if fovData.hideTask then
-        task.cancel(fovData.hideTask)
-        fovData.hideTask = nil
+    if fovData.hideTimer then
+        task.cancel(fovData.hideTimer)
+        fovData.hideTimer = nil
     end
     
     if not fovData.isHUDVisible then
@@ -263,14 +257,18 @@ local function ShowHUD(fovSize)
     
     UpdateHUDNumber(fovSize)
     
-    fovData.hideTask = task.delay(CONFIG.HUDAutoHideDelay, function()
+    fovData.hideTimer = task.delay(CONFIG.HUDAutoHideDelay, function()
         HideHUD()
     end)
 end
 
--- Hide HUD
+-- Hide HUD with roll up
 local function HideHUD()
     if not fovData.isHUDVisible then return end
+    if fovData.hideTimer then
+        task.cancel(fovData.hideTimer)
+        fovData.hideTimer = nil
+    end
     
     local hud = fovData.HUD
     
@@ -280,7 +278,7 @@ local function HideHUD()
     rollUp:Play()
     fovData.isHUDVisible = false
     
-    task.wait(0.4)
+    task.wait(0.45)
     hud.Visible = false
 end
 
@@ -311,17 +309,17 @@ local function RebuildFOV()
         dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
         dash.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
         dash.BackgroundColor3 = CONFIG.FOVColor
-        dash.BackgroundTransparency = 0.1
+        dash.BackgroundTransparency = 0.15
         dash.BorderSizePixel = 0
         dash.Rotation = math.deg(angle)
         dash.Parent = circleContainer
         
         local glow = Instance.new("Frame")
         glow.Name = "Glow"
-        glow.Size = UDim2.new(1, 4, 1, 4)
-        glow.Position = UDim2.new(0.5, -2, 0.5, -2)
+        glow.Size = UDim2.new(1, 6, 1, 6)
+        glow.Position = UDim2.new(0.5, -3, 0.5, -3)
         glow.BackgroundColor3 = CONFIG.FOVGlowColor
-        glow.BackgroundTransparency = 0.8
+        glow.BackgroundTransparency = 0.75
         glow.BorderSizePixel = 0
         glow.Parent = dash
         
