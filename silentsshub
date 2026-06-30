@@ -45,7 +45,7 @@ local function CreateFOVGUI()
     screenGui.IgnoreGuiInset = true
     screenGui.Parent = Player:WaitForChild("PlayerGui")
     
-    -- iOS Style HUD - Stretched horizontal
+    -- iOS Style HUD
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUD"
     hudFrame.Size = UDim2.new(0, 200, 0, 65)
@@ -282,7 +282,7 @@ local function HideHUD()
     hud.Visible = false
 end
 
--- Rebuild FOV
+-- Rebuild FOV with PURPLE colors
 local function RebuildFOV()
     local fovFrame = fovData.FOVFrame
     local circleContainer = fovData.CircleContainer
@@ -308,7 +308,7 @@ local function RebuildFOV()
         dash.Name = "Dash_" .. i
         dash.Size = UDim2.new(0, CONFIG.DashLength, 0, 1.0)
         dash.Position = UDim2.new(0.5, x - CONFIG.DashLength/2, 0.5, y - 0.5)
-        dash.BackgroundColor3 = CONFIG.FOVColor
+        dash.BackgroundColor3 = CONFIG.FOVColor  -- Light Purple
         dash.BackgroundTransparency = 0.15
         dash.BorderSizePixel = 0
         dash.Rotation = math.deg(angle)
@@ -318,7 +318,7 @@ local function RebuildFOV()
         glow.Name = "Glow"
         glow.Size = UDim2.new(1, 6, 1, 6)
         glow.Position = UDim2.new(0.5, -3, 0.5, -3)
-        glow.BackgroundColor3 = CONFIG.FOVGlowColor
+        glow.BackgroundColor3 = CONFIG.FOVGlowColor  -- Dark Purple
         glow.BackgroundTransparency = 0.75
         glow.BorderSizePixel = 0
         glow.Parent = dash
