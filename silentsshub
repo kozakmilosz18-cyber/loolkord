@@ -47,9 +47,9 @@ local function CreateFOVGUI()
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUD"
     hudFrame.Size = UDim2.new(0, 160, 0, 80)
-    hudFrame.Position = UDim2.new(0.5, -80, -0.12, 0)
+    hudFrame.Position = UDim2.new(0.5, -80, -0.15, 0) -- Start hidden above screen
     hudFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    hudFrame.BackgroundTransparency = 0.85
+    hudFrame.BackgroundTransparency = 0.15
     hudFrame.BorderSizePixel = 0
     hudFrame.Visible = true
     hudFrame.Parent = screenGui
@@ -200,25 +200,28 @@ local function ShowHUD(fovSize)
         fovData.hideTask = nil
     end
     
-    -- If HUD is hidden, roll it down
+    -- Make sure HUD is visible
+    hud.Visible = true
+    
+    -- If HUD is hidden (above screen), roll it down
     if not fovData.isHUDVisible then
-        hud.Visible = true
-        hud.BackgroundTransparency = 0.85
+        -- Start from above screen
+        hud.Position = UDim2.new(0.5, -80, -0.15, 0)
         
-        -- Roll down animation (from -0.12 to 0.05)
-        local rollDown = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        -- Roll down animation
+        local rollDown = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Position = UDim2.new(0.5, -80, 0.05, 0)
         })
         rollDown:Play()
         fovData.isHUDVisible = true
     else
         -- If already visible, just update the number with a small bounce
-        local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            TextSize = 40
+        local bounce = TweenService:Create(sizeLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            TextSize = 42
         })
         bounce:Play()
-        task.wait(0.15)
-        local bounceBack = TweenService:Create(sizeLabel, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        task.wait(0.1)
+        local bounceBack = TweenService:Create(sizeLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             TextSize = 36
         })
         bounceBack:Play()
@@ -236,16 +239,16 @@ local function HideHUD()
     
     local hud = fovData.HUD
     
-    -- Roll up animation (from 0.05 to -0.12)
-    local rollUp = TweenService:Create(hud, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Position = UDim2.new(0.5, -80, -0.12, 0)
+    -- Roll up animation
+    local rollUp = TweenService:Create(hud, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -80, -0.15, 0)
     })
     rollUp:Play()
     fovData.isHUDVisible = false
     
-    -- Hide after animation completes
-    task.wait(0.4)
-    hud.Visible = false
+    -- Don't hide completely, just move above screen
+    task.wait(0.5)
+    hud.Visible = true -- Keep visible but above screen
 end
 
 -- Rebuild FOV dashes when size changes
